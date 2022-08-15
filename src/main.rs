@@ -22,10 +22,6 @@ struct Args {
     #[clap(short, long)]
     debug: bool,
 
-    /// Disable saving the VM state
-    #[clap(short, long)]
-    no_save: bool,
-
     /// Disassemble binary to the provided file
     #[clap(long)]
     disassemble: Option<String>,
@@ -85,10 +81,6 @@ fn run(args: Args) -> Result<()> {
 
     loop {
         if vm.memory()[vm.pc() as usize] == 20 && queue.len() == 0 {
-            if !args.no_save {
-                synacor_challenge::save_vm_state(&vm, &state_path, last_lines.join("\n"))?;
-            }
-
             if args.debug {
                 println!("{} {}", "PC: ".yellow(), format!("{:04X}", vm.pc() - 2).cyan());
             }
@@ -116,7 +108,16 @@ fn run(args: Args) -> Result<()> {
                 Event::Input(dest) => {
                     if queue.len() == 0 {
                         let mut input = String::new();
-                        std::io::stdin().read_line(&mut input).unwrap();
+
+                        while input.len() == 0 {
+                            std::io::stdin().read_line(&mut input).unwrap();
+
+                            if input.trim() == "save" {
+                                synacor_challenge::save_vm_state(&vm, &state_path, last_lines.join("\n"))?;
+                                input.clear();
+                                println!("{}", "VM state saved".green());
+                            }
+                        }
 
                         for char in input.trim().bytes() {
                             queue.push_back(char);
