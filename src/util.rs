@@ -26,7 +26,7 @@ pub fn concat_u16(hi: u8, lo: u8) -> u16 {
 
 pub fn u8_array_to_u16(src: &[u8]) -> Vec<u16> {
     src.chunks(2)
-        .map(|chunk| concat_u16(chunk[1], chunk[0]))
+        .map(|chunk| concat_u16(*chunk.get(1).unwrap_or(&0), chunk[0]))
         .collect()
 }
 
