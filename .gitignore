@@ -3,4 +3,5 @@
 
 *.bin
 *.iml
+*.asm
 out.txt
