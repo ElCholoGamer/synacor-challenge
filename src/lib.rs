@@ -4,6 +4,7 @@ use std::fs;
 pub mod error;
 pub mod vm;
 pub mod util;
+pub mod disassembler;
 
 pub use error::{Error, Result};
 pub use vm::{SynacorVM, Status, Event};

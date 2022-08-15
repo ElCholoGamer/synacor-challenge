@@ -2,8 +2,10 @@ use std::collections::LinkedList;
 use clap::Parser;
 use colored::Colorize;
 use std::fs;
+use std::fs::File;
 use synacor_challenge::{Status, SynacorVM, Result, Error, Event};
 use synacor_challenge::util;
+use synacor_challenge::disassembler;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -13,12 +15,20 @@ struct Args {
     bin: Option<String>,
 
     /// VM data file
-    #[clap(short, long)]
+    #[clap(long)]
     state: Option<String>,
 
     /// Debug mode
     #[clap(short, long)]
     debug: bool,
+
+    /// Disable saving the VM state
+    #[clap(short, long)]
+    no_save: bool,
+
+    /// Disassemble binary to the provided file
+    #[clap(long)]
+    disassemble: Option<String>,
 }
 
 fn main() {
@@ -30,6 +40,24 @@ fn main() {
 }
 
 fn run(args: Args) -> Result<()> {
+    if let Some(out_path) = args.disassemble {
+        if let Some(filename) = &args.bin {
+            println!("Disassembling...");
+
+            let buf = fs::read(&filename).map_err(|e| Error::IO(e))?;
+            let bin = util::u8_array_to_u16(&buf);
+
+            let mut file = File::create(out_path).map_err(|e| Error::IO(e))?;
+            disassembler::disassemble(&bin, &mut file).map_err(|e| Error::IO(e))?;
+
+            println!("Done.");
+        }  else {
+            eprintln!("{}", "No binary file provided".red());
+        }
+
+        return Ok(());
+    }
+
     let mut vm = SynacorVM::new();
 
     if let Some(filename) = &args.state {
@@ -59,7 +87,9 @@ fn run(args: Args) -> Result<()> {
                 Event::Output(val) => print!("{}", val as char),
                 Event::Input(dest) => {
                     if queue.len() == 0 {
-                        synacor_challenge::save_vm_state(&vm, &state_path)?;
+                        if !args.no_save {
+                            synacor_challenge::save_vm_state(&vm, &state_path)?;
+                        }
 
                         if args.debug {
                             println!("{} {}", "PC: ".cyan(), format!("{:04X}", vm.pc() - 2).cyan());
