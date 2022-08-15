@@ -1,195 +1,85 @@
-use std::collections::LinkedList;
-use std::io::Read;
+use std::path::Path;
+use std::fs;
 
 pub mod error;
+pub mod vm;
+pub mod util;
 
-pub use error::{Error,Result};
+pub use error::{Error, Result};
+pub use vm::{SynacorVM, Status, Event};
+use crate::vm::STACK_LEN;
+
+pub const SAVE_DATA_LEN: usize = 0x800A + STACK_LEN;
 
 #[derive(Debug, Clone)]
-pub struct Stack<T> {
-    values: LinkedList<T>,
+pub struct Stack<T: Default + Copy, const S: usize> {
+    pointer: usize,
+    contents: [T; S],
 }
 
-impl<T> Stack<T> {
+impl<T: Default + Copy, const S: usize> Stack<T, S> {
     pub fn new() -> Self {
         Self {
-            values: LinkedList::new(),
+            pointer: 0,
+            contents: [T::default(); S],
         }
     }
 
-    pub fn push(&mut self, val: T) {
-        self.values.push_back(val);
-    }
-
-    pub fn pop(&mut self) -> Result<T> {
-        self.values.pop_back().ok_or(Error::StackUnderflow)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Input {
-
-}
-
-#[derive(Debug, Clone)]
-pub struct SynacorVM {
-    memory: [u16; 0x8000],
-    registers: [u16; 8],
-    stack: Stack<u16>,
-    pc: u16,
-    input_queue: LinkedList<char>,
-}
-
-impl SynacorVM {
-    pub fn new() -> Self {
-        Self {
-            memory: [0; 0x8000],
-            registers: [0; 8],
-            stack: Stack::new(),
-            pc: 0,
-            input_queue: LinkedList::new(),
-        }
-    }
-
-    pub fn load_binary(&mut self, bin: Vec<u8>) {
-        for (i, chunk) in bin.chunks(2).enumerate() {
-            let lo = chunk[0];
-            let hi = *chunk.get(1).unwrap_or(&0);
-            self.memory[i] = ((hi as u16) << 8) | (lo as u16);
-        }
-    }
-
-    pub fn run(&mut self) -> Result<()> {
-        loop {
-            let opcode = self.read_pc();
-            match opcode {
-                0 => break, // halt
-                1 => { // set
-                    let reg = self.read_pc();
-                    let val = self.read_param_value()?;
-                    self.write_register(reg, val)?;
-                }
-                2 => { // push
-                    let val = self.read_param_value()?;
-                    self.stack.push(val);
-                }
-                3 => { // pop
-                    let reg = self.read_pc();
-                    let val = self.stack.pop()?;
-                    self.write_register(reg, val)?;
-                }
-                4 => { // eq
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, if a == b { 1 } else { 0 })?;
-                }
-                5 => { // gt
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, if a > b { 1 } else { 0 })?;
-                }
-                6 => self.pc = self.read_param_value()?, // jmp
-                7 => { // jt
-                    let val = self.read_param_value()?;
-                    let addr = self.read_param_value()?;
-                    if val != 0 {
-                        self.pc = addr;
-                    }
-                }
-                8 => { // jf
-                    let val = self.read_param_value()?;
-                    let addr = self.read_param_value()?;
-                    if val == 0 {
-                        self.pc = addr;
-                    }
-                }
-                9 => { // add
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, (a + b) % 0x8000)?;
-                }
-                10 => { // mult
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, a.wrapping_mul(b) % 0x8000)?;
-                }
-                11 => { // mod
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, a % b)?;
-                }
-                12 => { // and
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, a & b)?;
-                }
-                13 => { // or
-                    let reg = self.read_pc();
-                    let a = self.read_param_value()?;
-                    let b = self.read_param_value()?;
-                    self.write_register(reg, a | b)?;
-                }
-                14 => { // not
-                    let reg = self.read_pc();
-                    let val = self.read_param_value()?;
-                    self.write_register(reg, !val & 0x7FFF)?;
-                }
-                15 => { // rmem
-                    let reg = self.read_pc();
-                    let addr = self.read_param_value()?;
-                    self.write_register(reg, self.memory[addr as usize])?;
-                }
-                16 => { // wmem
-                    let addr = self.read_param_value()?;
-                    let val = self.read_param_value()?;
-                    self.memory[addr as usize] = val;
-                }
-                17 => { // call
-                    let addr = self.read_param_value()?;
-                    self.stack.push(self.pc);
-                    self.pc = addr;
-                }
-                18 => self.pc = self.stack.pop()?, // ret
-                19 => { // out
-                    let val = self.read_param_value()?;
-                    print!("{}", val as u8 as char);
-                }
-                21 => {} // noop
-                _ => return Err(Error::IllegalOpcode(opcode))
-            }
-        }
-        Ok(())
-    }
-
-    fn read_pc(&mut self) -> u16 {
-        let val = self.memory[self.pc as usize];
-        self.pc = (self.pc + 1) & 0x7FFF;
-        val
-    }
-
-    fn read_param_value(&mut self) -> Result<u16> {
-        let val = self.read_pc();
-        if val < 0x8000 {
-            Ok(val)
-        } else if val < 0x8008 {
-            Ok(self.registers[(val - 0x8000) as usize])
+    pub fn push(&mut self, val: T) -> Result<()> {
+        if self.pointer >= S {
+            Err(Error::StackOverflow)
         } else {
-            Err(Error::IllegalParameterRead(val))
-        }
-    }
-
-    fn write_register(&mut self, dest: u16, val: u16) -> Result<()> {
-        if dest < 0x8000 || dest >= 0x8008 {
-            Err(Error::IllegalParameterWrite(val))
-        } else {
-            self.registers[(dest - 0x8000) as usize] = val;
+            self.contents[self.pointer] = val;
+            self.pointer += 1;
             Ok(())
         }
     }
+
+    pub fn pop(&mut self) -> Result<T> {
+        if self.pointer == 0 {
+            Err(Error::StackUnderflow)
+        } else {
+            self.pointer -= 1;
+            Ok(std::mem::replace(&mut self.contents[self.pointer], T::default()))
+        }
+    }
+
+    pub fn contents(&self) -> &[T; S] { &self.contents }
+
+    pub fn pointer(&self) -> &usize { &self.pointer }
+
+    pub fn contents_mut(&mut self) -> &mut [T; S] { &mut self.contents }
+
+    pub fn pointer_mut(&mut self) -> &mut usize { &mut self.pointer }
+
+    pub fn len(&self) -> usize {
+        S
+    }
 }
+
+pub fn save_vm_state<P: AsRef<Path>>(vm: &SynacorVM, path: P) -> Result<()> {
+    let mut data = [0; SAVE_DATA_LEN];
+    data[0] = vm.pc();
+    data[0x1..0x9].clone_from_slice(vm.registers());
+    data[0x9..0x8009].clone_from_slice(vm.memory());
+    data[0x8009] = vm.stack().pointer as u16;
+    data[0x800A..].clone_from_slice(vm.stack().contents());
+
+    let buf = util::u16_array_to_u8(&data);
+    fs::write(path, buf).map_err(|e| Error::IO(e))
+}
+
+pub fn load_vm_state(vm: &mut SynacorVM, data: &[u16]) -> Result<()> {
+    if data.len() != SAVE_DATA_LEN {
+        return Err(Error::InvalidDataLength(data.len()));
+    }
+
+    *vm.pc_mut() = data[0];
+    vm.registers_mut().clone_from_slice(&data[0x1..0x9]);
+    vm.memory_mut().clone_from_slice(&data[0x9..0x8009]);
+    *vm.stack_mut().pointer_mut() = data[0x8009] as usize;
+    vm.stack_mut().contents_mut().clone_from_slice(&data[0x800A..SAVE_DATA_LEN]);
+
+    Ok(())
+}
+
