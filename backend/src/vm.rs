@@ -148,6 +148,7 @@ impl SynacorVM {
             21 => {} // noop
             _ => return Err(Error::IllegalOpcode(opcode))
         }
+
         Ok(Status::Continue)
     }
 

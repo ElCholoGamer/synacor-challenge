@@ -37,7 +37,7 @@ fn run(args: Args) -> Result<()> {
             println!("Disassembling...");
 
             let buf = fs::read(&filename).map_err(|e| Error::IO(e))?;
-            let bin = util::u8_array_to_u16(&buf);
+            let bin = frontend::u8_array_to_u16(&buf);
 
             let mut file = File::create(out_path).map_err(|e| Error::IO(e))?;
             backend::disassemble(&bin, &mut file).map_err(|e| Error::IO(e))?;
@@ -55,8 +55,8 @@ fn run(args: Args) -> Result<()> {
 
     if let Some(filename) = &args.state {
         let buf = fs::read(filename).map_err(|e| Error::IO(e))?;
-        let data = util::u8_array_to_u16(&buf);
-        let initial_output = backend::load_vm_state(&mut vm, &data)?;
+        let data = frontend::u8_array_to_u16(&buf);
+        let initial_output = frontend::load_vm_state(&mut vm, &data)?;
 
         initial_output.split('\n').for_each(|s| last_lines.push(s.into()));
 
@@ -64,8 +64,7 @@ fn run(args: Args) -> Result<()> {
         println!("{}", initial_output.cyan());
     } else if let Some(filename) = args.bin {
         let buf = fs::read(&filename).map_err(|e| Error::IO(e))?;
-        let bin = util::u8_array_to_u16(&buf);
-
+        let bin = frontend::u8_array_to_u16(&buf);
         vm.load_binary(&bin);
     } else {
         println!("No binary or state file provided. Use --help for more.");
@@ -76,6 +75,7 @@ fn run(args: Args) -> Result<()> {
     let mut current_line = String::new();
     let mut pc_history = LimitedQueue::new(0x1000);
     let mut last_command: Option<String> = None;
+    let mut saved = true;
 
     'main: loop {
         pc_history.push(vm.pc());
@@ -97,7 +97,6 @@ fn run(args: Args) -> Result<()> {
                 Event::Input(dest) => {
                     if input_queue.len() == 0 {
                         let mut input = String::new();
-                        let mut saved = false;
 
                         loop {
                             input.clear();
@@ -134,7 +133,7 @@ fn run(args: Args) -> Result<()> {
                                     };
 
                                     *vm.pc_mut() -= 2;
-                                    backend::save_vm_state(&vm, file, last_lines.contents().join("\n"))?;
+                                    frontend::save_vm_state(&vm, file, last_lines.contents().join("\n"))?;
                                     *vm.pc_mut() += 2;
                                     saved = true;
                                     println!("{}", "VM state saved".green());
@@ -190,6 +189,7 @@ fn run(args: Args) -> Result<()> {
         }
 
         if let Status::Halt = status { break; }
+        saved = false;
     }
     Ok(())
 }
