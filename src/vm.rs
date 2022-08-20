@@ -1,4 +1,5 @@
 use crate::{Result, Error, Stack};
+use colored::Colorize;
 
 pub const STACK_LEN: usize = 0x1000;
 
@@ -170,7 +171,10 @@ impl SynacorVM {
         if val < 0x8000 {
             Ok(val)
         } else if val < 0x8008 {
-            Ok(self.registers[(val - 0x8000) as usize])
+            if val == 0x8007 {
+                println!("{} - {:04X}, PC: {:04X}", "Reading eighth register".green(), self.registers[7], self.pc);
+            }
+            Ok(self.registers[(val & 0x7FFF) as usize])
         } else {
             Err(Error::IllegalParameterRead(val))
         }
@@ -180,7 +184,7 @@ impl SynacorVM {
         if dest < 0x8000 || dest >= 0x8008 {
             Err(Error::IllegalParameterWrite(val))
         } else {
-            self.registers[(dest - 0x8000) as usize] = val;
+            self.registers[(dest & 0x7FFF) as usize] = val;
             Ok(())
         }
     }

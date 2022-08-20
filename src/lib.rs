@@ -47,7 +47,7 @@ impl<T: Default + Copy, const S: usize> Stack<T, S> {
 
     pub fn contents(&self) -> &[T; S] { &self.contents }
 
-    pub fn pointer(&self) -> &usize { &self.pointer }
+    pub fn pointer(&self) -> usize { self.pointer }
 
     pub fn contents_mut(&mut self) -> &mut [T; S] { &mut self.contents }
 

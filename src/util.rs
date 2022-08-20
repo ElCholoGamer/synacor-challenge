@@ -1,3 +1,5 @@
+use std::fmt::UpperHex;
+
 pub fn write_u16(buf: &mut [u8], pos: usize, val: u16) {
     buf[pos] = (val & 0xFF) as u8;
     buf[pos + 1] = ((val >> 8) & 0xFF) as u8;
@@ -34,6 +36,10 @@ pub fn u16_array_to_u8(src: &[u16]) -> Vec<u8> {
     src.iter()
         .map(|v| [(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8])
         .collect::<Vec<[u8; 2]>>().concat()
+}
+
+pub fn format_hex_slice<T: UpperHex>(slice: &[T], sep: &str) -> String {
+    slice.iter().map(|n| format!("{:04X}", n)).collect::<Vec<_>>().join(sep)
 }
 
 #[cfg(test)]

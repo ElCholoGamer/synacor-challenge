@@ -15,15 +15,11 @@ struct Args {
     bin: Option<String>,
 
     /// VM data file
-    #[clap(long)]
+    #[clap(short, long)]
     state: Option<String>,
 
-    /// Debug mode
-    #[clap(short, long)]
-    debug: bool,
-
     /// Disassemble binary to the provided file
-    #[clap(long)]
+    #[clap(short, long)]
     disassemble: Option<String>,
 }
 
@@ -76,14 +72,14 @@ fn run(args: Args) -> Result<()> {
     }
 
     let mut queue = LinkedList::new();
-    let state_path = args.state.unwrap_or("state.bin".into());
     let mut current_line = String::new();
+    let mut pc_history = Vec::with_capacity(0x1000);
+    let mut last_command: Option<String> = None;
 
-    loop {
-        if vm.memory()[vm.pc() as usize] == 20 && queue.len() == 0 {
-            if args.debug {
-                println!("{} {}", "PC: ".yellow(), format!("{:04X}", vm.pc() - 2).cyan());
-            }
+    'main: loop {
+        pc_history.push(vm.pc());
+        if pc_history.len() >= pc_history.capacity() {
+            pc_history.drain(..1);
         }
 
         let status = vm.step()?;
@@ -108,18 +104,79 @@ fn run(args: Args) -> Result<()> {
                 Event::Input(dest) => {
                     if queue.len() == 0 {
                         let mut input = String::new();
+                        let mut saved = false;
 
-                        while input.len() == 0 {
+                        loop {
+                            input.clear();
                             std::io::stdin().read_line(&mut input).unwrap();
+                            input = input.trim().into();
 
-                            if input.trim() == "save" {
-                                synacor_challenge::save_vm_state(&vm, &state_path, last_lines.join("\n"))?;
-                                input.clear();
-                                println!("{}", "VM state saved".green());
+                            if !input.starts_with('!') { break; }
+
+                            if input == "!!" {
+                                match std::mem::replace(&mut last_command, None) {
+                                    Some(val) => {
+                                        println!("{} {}", "Repeating".cyan(), val.cyan());
+                                        input = val;
+                                    },
+                                    None => {
+                                        println!("{}", "No command to repeat".red());
+                                        continue;
+                                    }
+                                }
+                            }
+
+                            last_command = Some(input.clone());
+
+                            let words: Vec<&str> = input.trim().split_whitespace().collect();
+
+                            match &words[0][1..] {
+                                "save" => {
+                                    let file = match words.get(1) {
+                                        Some(f) => *f,
+                                        None => {
+                                            println!("{}", "No filename provided".red());
+                                            continue;
+                                        },
+                                    };
+
+                                    *vm.pc_mut() -= 2;
+                                    synacor_challenge::save_vm_state(&vm, file, last_lines.join("\n"))?;
+                                    *vm.pc_mut() += 2;
+                                    saved = true;
+                                    println!("{}", "VM state saved".green());
+                                }
+                                "debug" => {
+                                    let stack = vm.stack();
+                                    println!("{} {}", "PC:".yellow(), format!("{:04X}", pc_history.last().unwrap_or(&0)).yellow());
+                                    println!("{} {}", "Registers:".yellow(), util::format_hex_slice(vm.registers(), ", ").yellow());
+                                    println!("{} {} {}", "Stack:".yellow(), util::format_hex_slice(&stack.contents()[..stack.pointer()], " - ").yellow(), "<--".yellow());
+                                }
+                                "history" => {
+                                    let limit_str = words.get(1).unwrap_or(&"10");
+                                    let limit = std::cmp::min(limit_str.parse().unwrap_or(10), pc_history.len());
+
+                                    println!("{}", "PC history:".yellow());
+                                    println!("{}", util::format_hex_slice(&pc_history[pc_history.len() - limit..], ", ").yellow());
+                                }
+                                "exit" => {
+                                    let confirm = match words.get(1) {
+                                        Some(val) => *val == "nosave",
+                                        None => false,
+                                    };
+
+                                    if !confirm && !saved {
+                                        println!("{}", "VM state has not been saved!".red());
+                                        continue;
+                                    }
+
+                                    break 'main;
+                                }
+                                _ => println!("{}", "Unknown command".red()),
                             }
                         }
 
-                        for char in input.trim().bytes() {
+                        for char in input.bytes() {
                             queue.push_back(char);
                         }
 
