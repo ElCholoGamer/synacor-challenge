@@ -3,9 +3,9 @@ use clap::Parser;
 use colored::Colorize;
 use std::fs;
 use std::fs::File;
-use synacor_challenge::{Status, SynacorVM, Result, Error, Event};
-use synacor_challenge::util;
-use synacor_challenge::disassembler;
+use backend::{Status, SynacorVM, Result, Error, Event};
+use backend::util;
+use frontend::LimitedQueue;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -40,7 +40,7 @@ fn run(args: Args) -> Result<()> {
             let bin = util::u8_array_to_u16(&buf);
 
             let mut file = File::create(out_path).map_err(|e| Error::IO(e))?;
-            disassembler::disassemble(&bin, &mut file).map_err(|e| Error::IO(e))?;
+            backend::disassemble(&bin, &mut file).map_err(|e| Error::IO(e))?;
 
             println!("Done.");
         } else {
@@ -56,7 +56,7 @@ fn run(args: Args) -> Result<()> {
     if let Some(filename) = &args.state {
         let buf = fs::read(filename).map_err(|e| Error::IO(e))?;
         let data = util::u8_array_to_u16(&buf);
-        let initial_output = synacor_challenge::load_vm_state(&mut vm, &data)?;
+        let initial_output = backend::load_vm_state(&mut vm, &data)?;
         last_lines = initial_output.split('\n').map(|s| s.into()).collect();
 
         println!("{}", "Save state loaded".green());
@@ -71,16 +71,13 @@ fn run(args: Args) -> Result<()> {
         return Ok(());
     }
 
-    let mut queue = LinkedList::new();
+    let mut input_queue = LinkedList::new();
     let mut current_line = String::new();
-    let mut pc_history = Vec::with_capacity(0x1000);
+    let mut pc_history = LimitedQueue::new(0x1000);
     let mut last_command: Option<String> = None;
 
     'main: loop {
         pc_history.push(vm.pc());
-        if pc_history.len() >= pc_history.capacity() {
-            pc_history.drain(..1);
-        }
 
         let status = vm.step()?;
 
@@ -102,7 +99,7 @@ fn run(args: Args) -> Result<()> {
                     }
                 }
                 Event::Input(dest) => {
-                    if queue.len() == 0 {
+                    if input_queue.len() == 0 {
                         let mut input = String::new();
                         let mut saved = false;
 
@@ -141,23 +138,31 @@ fn run(args: Args) -> Result<()> {
                                     };
 
                                     *vm.pc_mut() -= 2;
-                                    synacor_challenge::save_vm_state(&vm, file, last_lines.join("\n"))?;
+                                    backend::save_vm_state(&vm, file, last_lines.join("\n"))?;
                                     *vm.pc_mut() += 2;
                                     saved = true;
                                     println!("{}", "VM state saved".green());
                                 }
                                 "debug" => {
                                     let stack = vm.stack();
-                                    println!("{} {}", "PC:".yellow(), format!("{:04X}", pc_history.last().unwrap_or(&0)).yellow());
+                                    println!("{} {}", "PC:".yellow(), format!("{:04X}", pc_history.peek_last().unwrap_or(&0)).yellow());
                                     println!("{} {}", "Registers:".yellow(), util::format_hex_slice(vm.registers(), ", ").yellow());
                                     println!("{} {} {}", "Stack:".yellow(), util::format_hex_slice(&stack.contents()[..stack.pointer()], " - ").yellow(), "<--".yellow());
                                 }
                                 "history" => {
-                                    let limit_str = words.get(1).unwrap_or(&"10");
+                                    let limit_str = match words.get(1) {
+                                        Some(s) => s,
+                                        None => {
+                                            println!("{}", "No limit provided".red());
+                                            continue;
+                                        }
+                                    };
+
                                     let limit = std::cmp::min(limit_str.parse().unwrap_or(10), pc_history.len());
+                                    let history = pc_history.contents();
 
                                     println!("{}", "PC history:".yellow());
-                                    println!("{}", util::format_hex_slice(&pc_history[pc_history.len() - limit..], ", ").yellow());
+                                    println!("{}", util::format_hex_slice(&history[history.len() - limit..], ", ").yellow());
                                 }
                                 "exit" => {
                                     let confirm = match words.get(1) {
@@ -177,13 +182,13 @@ fn run(args: Args) -> Result<()> {
                         }
 
                         for char in input.bytes() {
-                            queue.push_back(char);
+                            input_queue.push_back(char);
                         }
 
-                        queue.push_back(b'\n');
+                        input_queue.push_back(b'\n');
                     }
 
-                    vm.write_input(dest, queue.pop_front().unwrap_or(b'\n'))?;
+                    vm.write_input(dest, input_queue.pop_front().unwrap_or(b'\n'))?;
                 }
             }
         }

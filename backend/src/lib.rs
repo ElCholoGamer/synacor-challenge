@@ -8,7 +8,9 @@ pub mod disassembler;
 
 pub use error::{Error, Result};
 pub use vm::{SynacorVM, Status, Event};
-use crate::vm::STACK_LEN;
+pub use disassembler::disassemble;
+
+use vm::STACK_LEN;
 
 pub const SAVE_DATA_LEN: usize = 0x800A + STACK_LEN;
 

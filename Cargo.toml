@@ -1,8 +1,5 @@
-[package]
-name = "synacor-challenge"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-clap = { version = "3.2.16", features = ["derive"] }
-colored = "2.0.0"
+[workspace]
+members = [
+    "backend",
+    "frontend"
+]
