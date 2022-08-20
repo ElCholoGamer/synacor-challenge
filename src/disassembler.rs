@@ -42,7 +42,9 @@ pub fn disassemble(bin: &[u16], out: &mut impl Write) -> Result<()> {
         } else {
             let param_strings = bin[pc..pc + params].iter().map(|&val| {
                 if opcode == 19 {
-                    if val == 10 {
+                    if val == 0 {
+                        "'[NUL]' ".into()
+                    } else if val == 10 {
                         "'\\n'".into()
                     } else {
                         format!("'{}'", val as u8 as char)
@@ -50,7 +52,7 @@ pub fn disassemble(bin: &[u16], out: &mut impl Write) -> Result<()> {
                 } else if val < 0x8000 {
                     format!("#{:04X}", val)
                 } else if val < 0x8008 {
-                    format!("({})", val & 0x8)
+                    format!("({})", val & 0x7)
                 } else {
                     format!("!{:04X}", val)
                 }
