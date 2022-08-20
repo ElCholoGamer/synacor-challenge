@@ -51,13 +51,14 @@ fn run(args: Args) -> Result<()> {
     }
 
     let mut vm = SynacorVM::new();
-    let mut last_lines = Vec::<String>::new();
+    let mut last_lines = LimitedQueue::<String>::new(20);
 
     if let Some(filename) = &args.state {
         let buf = fs::read(filename).map_err(|e| Error::IO(e))?;
         let data = util::u8_array_to_u16(&buf);
         let initial_output = backend::load_vm_state(&mut vm, &data)?;
-        last_lines = initial_output.split('\n').map(|s| s.into()).collect();
+
+        initial_output.split('\n').for_each(|s| last_lines.push(s.into()));
 
         println!("{}", "Save state loaded".green());
         println!("{}", initial_output.cyan());
@@ -88,12 +89,7 @@ fn run(args: Args) -> Result<()> {
                     print!("{}", val);
 
                     if val == '\n' {
-                        last_lines.push(current_line.clone());
-
-                        if last_lines.len() > 20 {
-                            last_lines.drain(..1);
-                        }
-                        current_line.clear();
+                        last_lines.push(std::mem::replace(&mut current_line, String::new()));
                     } else {
                         current_line.push(val);
                     }
@@ -138,7 +134,7 @@ fn run(args: Args) -> Result<()> {
                                     };
 
                                     *vm.pc_mut() -= 2;
-                                    backend::save_vm_state(&vm, file, last_lines.join("\n"))?;
+                                    backend::save_vm_state(&vm, file, last_lines.contents().join("\n"))?;
                                     *vm.pc_mut() += 2;
                                     saved = true;
                                     println!("{}", "VM state saved".green());
