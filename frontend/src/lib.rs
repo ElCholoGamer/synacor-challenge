@@ -48,16 +48,11 @@ impl TerminalVM {
                 Some(Status::Halt) => break,
                 Some(Status::Output(val)) => print!("{}", val as char),
                 Some(Status::Input(dest)) => {
-                    if self.input_queue.is_empty() {
-                        self.take_input();
-                    }
-
+                    self.take_input();
                     self.vm.write_input(dest, self.input_queue.pop_front().unwrap())?;
                 }
                 _ => {}
             }
-
-            self.saved = false;
         }
 
         Ok(())
@@ -71,6 +66,7 @@ impl TerminalVM {
 
             if !input.starts_with(':') {
                 self.write_input(&input);
+                self.saved = false;
                 continue;
             }
 

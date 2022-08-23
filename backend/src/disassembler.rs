@@ -1,4 +1,4 @@
-use std::io::{Write,Result};
+use std::io::{Write, Result};
 
 pub fn disassemble(bin: &[u16], out: &mut impl Write) -> Result<()> {
     let mut pc = 0;
@@ -39,29 +39,26 @@ pub fn disassemble(bin: &[u16], out: &mut impl Write) -> Result<()> {
         if params == 0 {
             writeln!(out, "{}", name)?;
             continue;
-        } else {
-            let param_strings = bin[pc..pc + params].iter().map(|&val| {
-                if opcode == 19 {
-                    if val == 0 {
-                        "'[NUL]' ".into()
-                    } else if val == 10 {
-                        "'\\n'".into()
-                    } else {
-                        format!("'{}'", val as u8 as char)
-                    }
-                } else if val < 0x8000 {
-                    format!("#{:04X}", val)
-                } else if val < 0x8008 {
-                    format!("({})", val & 0x7)
-                } else {
-                    format!("!{:04X}", val)
-                }
-            }).collect::<Vec<String>>();
-
-            pc += params;
-
-            writeln!(out, "{:6}{}", name, param_strings.join(", "))?;
         }
+
+        let param_strings = bin[pc..pc + params].iter().map(|&val| {
+            if opcode == 19 {
+                match val {
+                    0 => "'[NUL]' ".into(),
+                    10 => "'\\n'".into(),
+                    _ => format!("'{}'", val as u8 as char),
+                }
+            } else if val < 0x8000 {
+                format!("#{:04X}", val)
+            } else if val < 0x8008 {
+                format!("({})", val & 0x7)
+            } else {
+                format!("!{:04X}", val)
+            }
+        }).collect::<Vec<_>>();
+
+        pc += params;
+        writeln!(out, "{:6}{}", name, param_strings.join(", "))?;
     }
 
     Ok(())
