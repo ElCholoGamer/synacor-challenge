@@ -4,14 +4,9 @@ pub const STACK_LEN: usize = 0x1000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Status {
-    Continue,
-    Halt,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Event {
     Output(u8),
     Input(u16),
+    Halt,
 }
 
 #[derive(Debug, Clone)]
@@ -19,8 +14,7 @@ pub struct SynacorVM {
     memory: [u16; 0x8000],
     registers: [u16; 8],
     stack: Stack<u16, STACK_LEN>,
-    pc: u16,
-    event: Option<Event>
+    pc: u16
 }
 
 impl SynacorVM {
@@ -30,7 +24,6 @@ impl SynacorVM {
             registers: [0; 8],
             stack: Stack::new(),
             pc: 0,
-            event: None,
         }
     }
 
@@ -40,11 +33,11 @@ impl SynacorVM {
         }
     }
 
-    pub fn step(&mut self) -> Result<Status> {
+    pub fn step(&mut self) -> Result<Option<Status>> {
         let opcode = self.read_pc();
 
         match opcode {
-            0 => return Ok(Status::Halt), // halt
+            0 => return Ok(Some(Status::Halt)), // halt
             1 => { // set
                 let reg = self.read_pc();
                 let val = self.read_param_value()?;
@@ -63,13 +56,13 @@ impl SynacorVM {
                 let reg = self.read_pc();
                 let a = self.read_param_value()?;
                 let b = self.read_param_value()?;
-                self.write_register(reg, if a == b { 1 } else { 0 })?;
+                self.write_register(reg, (a == b) as u16)?;
             }
             5 => { // gt
                 let reg = self.read_pc();
                 let a = self.read_param_value()?;
                 let b = self.read_param_value()?;
-                self.write_register(reg, if a > b { 1 } else { 0 })?;
+                self.write_register(reg, (a > b) as u16)?;
             }
             6 => self.pc = self.read_param_value()?, // jmp
             7 => { // jt
@@ -90,13 +83,13 @@ impl SynacorVM {
                 let reg = self.read_pc();
                 let a = self.read_param_value()?;
                 let b = self.read_param_value()?;
-                self.write_register(reg, (a + b) % 0x8000)?;
+                self.write_register(reg, (a + b) & 0x7FFF)?;
             }
             10 => { // mult
                 let reg = self.read_pc();
                 let a = self.read_param_value()?;
                 let b = self.read_param_value()?;
-                self.write_register(reg, a.wrapping_mul(b) % 0x8000)?;
+                self.write_register(reg, a.wrapping_mul(b) & 0x7FFF)?;
             }
             11 => { // mod
                 let reg = self.read_pc();
@@ -139,25 +132,21 @@ impl SynacorVM {
             18 => self.pc = self.stack.pop()?, // ret
             19 => { // out
                 let val = self.read_param_value()?;
-                self.event = Some(Event::Output(val as u8));
+                return Ok(Some(Status::Output(val as u8)));
             }
             20 => { // in
                 let reg = self.read_pc();
-                self.event = Some(Event::Input(reg));
+                return Ok(Some(Status::Input(reg)));
             }
             21 => {} // noop
             _ => return Err(Error::IllegalOpcode(opcode))
         }
 
-        Ok(Status::Continue)
+        Ok(None)
     }
 
     pub fn write_input(&mut self, dest: u16, val: u8) -> Result<()> {
         self.write_register(dest, val as u16)
-    }
-
-    pub fn pull_event(&mut self) -> Option<Event> {
-        std::mem::replace(&mut self.event, None)
     }
 
     fn read_pc(&mut self) -> u16 {

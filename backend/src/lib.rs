@@ -1,13 +1,17 @@
-use std::path::Path;
-
 pub mod error;
 pub mod vm;
-pub mod util;
 pub mod disassembler;
 
 pub use error::{Error, Result};
-pub use vm::{SynacorVM, Status, Event};
+pub use vm::{SynacorVM, Status};
 pub use disassembler::disassemble;
+
+#[macro_export]
+macro_rules! concat_u16 {
+    ($hi:expr,$lo:expr) => {
+        (($hi as u16) << 8) | $lo as u16
+    };
+}
 
 #[derive(Debug, Clone)]
 pub struct Stack<T: Default + Copy, const S: usize> {
@@ -42,11 +46,13 @@ impl<T: Default + Copy, const S: usize> Stack<T, S> {
         }
     }
 
-    pub fn contents(&self) -> &[T; S] { &self.contents }
+    pub fn contents(&self) -> &[T] { &self.contents[..self.pointer]}
+
+    pub fn full_contents(&self) -> &[T; S] { &self.contents }
 
     pub fn pointer(&self) -> usize { self.pointer }
 
-    pub fn contents_mut(&mut self) -> &mut [T; S] { &mut self.contents }
+    pub fn full_contents_mut(&mut self) -> &mut [T; S] { &mut self.contents }
 
     pub fn pointer_mut(&mut self) -> &mut usize { &mut self.pointer }
 
@@ -54,4 +60,3 @@ impl<T: Default + Copy, const S: usize> Stack<T, S> {
         S
     }
 }
-
