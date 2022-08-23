@@ -16,8 +16,12 @@ struct Args {
     #[clap(short, long)]
     load_state: bool,
 
-    /// Disassemble binary to the provided file
+    /// Start in debug mode
     #[clap(short, long)]
+    debug: bool,
+
+    /// Disassemble binary to the provided file
+    #[clap(long)]
     disassemble: bool,
 
     /// Output file for disassembly
@@ -61,6 +65,7 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         vm.load_binary(&bin);
     }
 
+    vm.set_debug(args.debug);
     vm.run()?;
     Ok(())
 }
