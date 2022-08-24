@@ -20,13 +20,17 @@ struct Args {
     #[clap(short, long)]
     debug: bool,
 
+    /// Debug breakpoints
+    #[clap(short, long)]
+    breakpoints: Vec<String>,
+
     /// Disassemble binary to the provided file
     #[clap(long)]
     disassemble: bool,
 
     /// Output file for disassembly
     #[clap(short, long)]
-    output: Option<PathBuf>
+    output: Option<PathBuf>,
 }
 
 fn main() {
@@ -65,7 +69,11 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         vm.load_binary(&bin);
     }
 
+    let breakpoints = args.breakpoints.iter()
+        .map(|s| u16::from_str_radix(s, 16))
+        .collect::<Result<Vec<_>, _>>()?;
+
     vm.set_debug(args.debug);
-    vm.run()?;
+    vm.run(&breakpoints)?;
     Ok(())
 }

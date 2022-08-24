@@ -41,9 +41,15 @@ impl TerminalVM {
         self.vm.load_binary(bin);
     }
 
-    pub fn run(&mut self) -> backend::Result<()> {
+    pub fn run(&mut self, breakpoints: &[u16]) -> backend::Result<()> {
         loop {
             self.pc_history.push(self.vm.pc());
+
+            if breakpoints.contains(&self.vm.pc()) {
+                self.debug = true;
+                println!();
+                println!("{}", "Breakpoint reached, debug mode enabled.".cyan());
+            }
 
             if self.debug { self.show_debug(); }
 
@@ -97,15 +103,15 @@ impl TerminalVM {
                 let buf = serialize_vm(&self.vm);
                 fs::write(filename, buf).map_err(|_| "could not write to file")?;
                 self.saved = true;
-                println!("{}", "VM state saved".green());
+                println!("{}", "VM state saved.".green());
             }
             "d" => { // debug
                 if !self.debug {
                     self.debug = true;
-                    println!("{}", "Debug mode enabled".cyan());
+                    println!("{}", "Debug mode enabled.".cyan());
                 } else {
                     self.debug = false;
-                    println!("{}", "Debug mode disabled".yellow());
+                    println!("{}", "Debug mode disabled.".yellow());
                 }
             }
             "h" => { // (pc) history
@@ -119,7 +125,7 @@ impl TerminalVM {
             }
             "st" => { // save temporary
                 self.save_state = Some(self.vm.clone());
-                println!("{}", "State saved".green());
+                println!("{}", "State saved.".green());
             }
             "lt" => { // load temporary
                 self.vm = self.save_state.clone().ok_or("no save state available")?;
@@ -143,6 +149,7 @@ impl TerminalVM {
     fn show_debug(&mut self) {
         while self.debug {
             let assembly = disassembler::to_assembly_instruction(&mut (self.vm.pc().clone() as usize), self.vm.memory());
+            println!();
             println!("{}", assembly.bold().cyan());
             println!("{} {}", "PC:".yellow().bold(), format!("{:04X}", self.vm.pc()).yellow());
             println!("{} {}", "Registers:".yellow().bold(), format!("{:04X?}", self.vm.registers()).yellow());
@@ -155,7 +162,7 @@ impl TerminalVM {
             if input.is_empty() { return; }
 
             if !input.starts_with(COMMAND_PREFIX) {
-                println!("{}", "Please type a command".red());
+                println!("{}", "Please type a command.".red());
                 continue;
             }
 
