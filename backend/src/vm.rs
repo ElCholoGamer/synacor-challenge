@@ -14,7 +14,7 @@ pub struct SynacorVM {
     memory: [u16; 0x8000],
     registers: [u16; 8],
     stack: Stack<u16, STACK_LEN>,
-    pc: u16
+    pc: u16,
 }
 
 impl SynacorVM {
@@ -117,11 +117,15 @@ impl SynacorVM {
             15 => { // rmem
                 let reg = self.read_pc();
                 let addr = self.read_param_value()?;
+                if addr & 0x8000 != 0 { return Err(Error::IllegalParameterRead(addr)); }
+
                 self.write_register(reg, self.memory[addr as usize])?;
             }
             16 => { // wmem
                 let addr = self.read_param_value()?;
                 let val = self.read_param_value()?;
+                if addr & 0x8000 != 0 { return Err(Error::IllegalParameterWrite(addr)); }
+
                 self.memory[addr as usize] = val;
             }
             17 => { // call
