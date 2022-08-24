@@ -64,7 +64,7 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
 
     if args.load_state {
         vm.load_state_buf(&buf)?;
-        print!("{}", "Save state loaded".green());
+        print!("{}", "VM state loaded".green());
     } else {
         vm.load_binary(&bin);
     }
@@ -73,7 +73,9 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         .map(|s| u16::from_str_radix(s, 16))
         .collect::<Result<Vec<_>, _>>()?;
 
+    let mut output_file = args.output.map(|path| File::create(path).unwrap());
+
     vm.set_debug(args.debug);
-    vm.run(&breakpoints)?;
+    vm.run(&breakpoints, &mut output_file)?;
     Ok(())
 }

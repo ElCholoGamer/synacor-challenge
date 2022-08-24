@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::{fs, mem, io, cmp, process};
+use std::io::Write;
 use backend::{disassembler, SynacorVM, Event, concat_u16};
 use backend::vm::STACK_LEN;
 use colored::Colorize;
@@ -41,9 +42,14 @@ impl TerminalVM {
         self.vm.load_binary(bin);
     }
 
-    pub fn run(&mut self, breakpoints: &[u16]) -> backend::Result<()> {
+    pub fn run(&mut self, breakpoints: &[u16], output: &mut Option<impl Write>) -> backend::Result<()> {
         loop {
             self.pc_history.push(self.vm.pc());
+
+            if let Some(out) = output {
+                let (assembly, _) = disassembler::to_assembly_instruction(self.vm.pc() as usize, self.vm.memory());
+                writeln!(out, "{:04X}    {}", self.vm.pc(), assembly).expect("could not write output");
+            }
 
             if breakpoints.contains(&self.vm.pc()) {
                 self.debug = true;
@@ -84,26 +90,43 @@ impl TerminalVM {
 
     pub fn set_debug(&mut self, debug: bool) { self.debug = debug; }
 
-    fn handle_command(&mut self, words: Vec<String>) -> Result<(), &str> {
+    fn handle_command(&mut self, mut words: Vec<String>) -> Result<(), &str> {
         if words[0] == ":." {
-            return match mem::replace(&mut self.last_command, None) {
+            match mem::replace(&mut self.last_command, None) {
                 Some(prev_words) => {
-                    println!("{} {}", "Repeating".cyan(), prev_words.join(", ").bold().cyan());
-                    self.handle_command(prev_words)
+                    println!("{} {}", "Repeating".cyan(), prev_words.join(" ").bold().cyan());
+                    words = prev_words;
                 }
-                None => Err("no command to repeat"),
-            };
+                None => return Err("no command to repeat"),
+            }
         }
 
         self.last_command = words.clone().into();
         match &words[0][1..] {
-            "s" => { // save
+            "s" => { // save (file)
                 let filename = words.get(1).ok_or("no filename provided")?;
 
                 let buf = serialize_vm(&self.vm);
                 fs::write(filename, buf).map_err(|_| "could not write to file")?;
                 self.saved = true;
                 println!("{}", "VM state saved.".green());
+            }
+            "l" => { // load (file)
+                let filename = words.get(1).ok_or("no filename provided")?;
+                let buf = fs::read(&filename).map_err(|_| "could not read file")?;
+
+                self.load_state_buf(&buf)?;
+                *self.vm.pc_mut() += 2;
+                print!("{}", "Save state loaded".green());
+            }
+            "qs" => { // quick save
+                self.save_state = Some(self.vm.clone());
+                println!("{}", "State saved.".green());
+            }
+            "ql" => { // quick load
+                self.vm = self.save_state.clone().ok_or("no save state available")?;
+                self.write_input("look");
+                print!("{}", "Save state loaded".green());
             }
             "d" => { // debug
                 if !self.debug {
@@ -123,15 +146,6 @@ impl TerminalVM {
                 println!("{}", "PC history:".yellow());
                 println!("{}", format!("{:04X?}", &history[history.len() - limit..]).yellow());
             }
-            "st" => { // save temporary
-                self.save_state = Some(self.vm.clone());
-                println!("{}", "State saved.".green());
-            }
-            "lt" => { // load temporary
-                self.vm = self.save_state.clone().ok_or("no save state available")?;
-                self.write_input("look");
-                print!("{}", "Save state loaded".green());
-            }
             "q!" => process::exit(0), // quit (no confirm)
             "q" => { // quit (force)
                 if !self.saved {
@@ -148,7 +162,7 @@ impl TerminalVM {
 
     fn show_debug(&mut self) {
         while self.debug {
-            let assembly = disassembler::to_assembly_instruction(&mut (self.vm.pc().clone() as usize), self.vm.memory());
+            let (assembly, _) = disassembler::to_assembly_instruction(self.vm.pc() as usize, self.vm.memory());
             println!();
             println!("{}", assembly.bold().cyan());
             println!("{} {}", "PC:".yellow().bold(), format!("{:04X}", self.vm.pc()).yellow());

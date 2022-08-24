@@ -4,15 +4,16 @@ pub fn disassemble(bin: &[u16], out: &mut impl Write) -> Result<()> {
     let mut pc = 0;
 
     while pc < bin.len() {
-        let assembly = to_assembly_instruction(&mut pc, bin);
+        let (assembly, incr) = to_assembly_instruction(pc, bin);
         write!(out, "{:04X}    {}", pc, assembly)?;
+        pc += incr;
     }
 
     Ok(())
 }
 
-pub fn to_assembly_instruction(pc: &mut usize, memory: &[u16]) -> String {
-    let opcode = memory[*pc];
+pub fn to_assembly_instruction(pc: usize, memory: &[u16]) -> (String, usize) {
+    let opcode = memory[pc];
     let invalid_str = format!("!{:04X}", opcode);
 
     let (name, param_count) = match opcode {
@@ -41,15 +42,14 @@ pub fn to_assembly_instruction(pc: &mut usize, memory: &[u16]) -> String {
         _ => (&*invalid_str, 0),
     };
 
-    *pc += 1;
     let mut out = String::new();
 
     if param_count == 0 {
         out.push_str(&format!("{}", name));
-        return out;
+        return (out, 1);
     }
 
-    let param_strings = memory[*pc..*pc + param_count].iter().map(|&val| {
+    let param_strings = memory[pc + 1..pc + 1 + param_count].iter().map(|&val| {
         if opcode == 19 {
             match val {
                 0 => "'[NUL]' ".into(),
@@ -65,7 +65,6 @@ pub fn to_assembly_instruction(pc: &mut usize, memory: &[u16]) -> String {
         }
     }).collect::<Vec<_>>();
 
-    *pc += param_count;
     out.push_str(&format!("{:6}{}", name, param_strings.join(", ")));
-    out
+    (out, 1 + param_count)
 }
