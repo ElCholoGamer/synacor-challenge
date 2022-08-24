@@ -38,14 +38,14 @@ pub fn to_assembly_instruction(pc: &mut usize, memory: &[u16]) -> String {
         19 => ("out", 1),
         20 => ("in", 1),
         21 => ("noop", 0),
-        _ => (invalid_str.as_str(), 0),
+        _ => (&*invalid_str, 0),
     };
 
     *pc += 1;
     let mut out = String::new();
 
     if param_count == 0 {
-        out.push_str(format!("{}", name).as_str());
+        out.push_str(&format!("{}", name));
         return out;
     }
 
@@ -66,6 +66,6 @@ pub fn to_assembly_instruction(pc: &mut usize, memory: &[u16]) -> String {
     }).collect::<Vec<_>>();
 
     *pc += param_count;
-    out.push_str(format!("{:6}{}", name, param_strings.join(", ")).as_str());
+    out.push_str(&format!("{:6}{}", name, param_strings.join(", ")));
     out
 }
