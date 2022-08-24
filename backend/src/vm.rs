@@ -3,7 +3,7 @@ use crate::{Result, Error, Stack};
 pub const STACK_LEN: usize = 0x1000;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Status {
+pub enum Event {
     Output(u8),
     Input(u16),
     Halt,
@@ -33,11 +33,11 @@ impl SynacorVM {
         }
     }
 
-    pub fn step(&mut self) -> Result<Option<Status>> {
+    pub fn step(&mut self) -> Result<Option<Event>> {
         let opcode = self.read_pc();
 
         match opcode {
-            0 => return Ok(Some(Status::Halt)), // halt
+            0 => return Ok(Some(Event::Halt)), // halt
             1 => { // set
                 let reg = self.read_pc();
                 let val = self.read_param_value()?;
@@ -136,11 +136,11 @@ impl SynacorVM {
             18 => self.pc = self.stack.pop()?, // ret
             19 => { // out
                 let val = self.read_param_value()?;
-                return Ok(Some(Status::Output(val as u8)));
+                return Ok(Some(Event::Output(val as u8)));
             }
             20 => { // in
                 let reg = self.read_pc();
-                return Ok(Some(Status::Input(reg)));
+                return Ok(Some(Event::Input(reg)));
             }
             21 => {} // noop
             _ => return Err(Error::IllegalOpcode(opcode))

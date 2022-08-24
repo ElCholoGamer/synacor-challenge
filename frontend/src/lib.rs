@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::{fs, mem, io, cmp, process};
-use backend::{disassembler, SynacorVM, Status, concat_u16};
+use backend::{disassembler, SynacorVM, Event, concat_u16};
 use backend::vm::STACK_LEN;
 use colored::Colorize;
 
@@ -55,9 +55,9 @@ impl TerminalVM {
 
             let status = self.vm.step()?;
             match status {
-                Some(Status::Halt) => break,
-                Some(Status::Output(val)) => print!("{}", val as char),
-                Some(Status::Input(dest)) => {
+                Some(Event::Halt) => break,
+                Some(Event::Output(val)) => print!("{}", val as char),
+                Some(Event::Input(dest)) => {
                     while self.input_queue.is_empty() {
                         let mut input = String::new();
                         io::stdin().read_line(&mut input).unwrap();

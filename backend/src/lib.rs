@@ -3,7 +3,7 @@ pub mod vm;
 pub mod disassembler;
 
 pub use error::{Error, Result};
-pub use vm::{SynacorVM, Status};
+pub use vm::{SynacorVM, Event};
 pub use disassembler::disassemble;
 
 #[macro_export]
