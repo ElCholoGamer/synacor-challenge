@@ -161,9 +161,9 @@ impl SynacorVM {
 
     fn read_param_value(&mut self) -> Result<u16> {
         let val = self.read_pc();
-        if val < 0x8000 {
+        if val & 0x8000 == 0 {
             Ok(val)
-        } else if val < 0x8008 {
+        } else if val & 0x7FF8 == 0 {
             Ok(self.registers[(val & 0x7FFF) as usize])
         } else {
             Err(Error::IllegalParameterRead(val))
@@ -171,7 +171,7 @@ impl SynacorVM {
     }
 
     fn write_register(&mut self, dest: u16, val: u16) -> Result<()> {
-        if dest < 0x8000 || dest >= 0x8008 {
+        if dest & 0x8000 == 0 || dest & 0x7FF8 != 0 {
             Err(Error::IllegalParameterWrite(val))
         } else {
             self.registers[(dest & 0x7FFF) as usize] = val;
