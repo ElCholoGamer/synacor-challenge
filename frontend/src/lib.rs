@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::{fs, mem, io, cmp, process};
 use std::io::Write;
-use backend::{disassembler, SynacorVM, Event, concat_u16};
+use backend::{disassembler, Result, SynacorVM, Event};
 use backend::vm::STACK_LEN;
 use colored::Colorize;
 
@@ -42,7 +42,7 @@ impl TerminalVM {
         self.vm.load_binary(bin);
     }
 
-    pub fn run(&mut self, breakpoints: &[u16], output: &mut Option<impl Write>) -> backend::Result<()> {
+    pub fn run(&mut self, breakpoints: &[u16], output: &mut Option<impl Write>) -> Result<()> {
         loop {
             self.pc_history.push(self.vm.pc());
 
@@ -240,7 +240,9 @@ pub fn to_u16_vec(src: &[u8]) -> Vec<u16> {
     let mut vec = Vec::with_capacity(src.len() / 2);
 
     for chunk in src.chunks(2) {
-        vec.push(concat_u16!(*chunk.get(1).unwrap_or(&0), chunk[0]))
+        let hi = *chunk.get(1).unwrap_or(&0);
+        let lo = chunk[0];
+        vec.push(((hi as u16) << 8) | (lo as u16))
     }
 
     vec

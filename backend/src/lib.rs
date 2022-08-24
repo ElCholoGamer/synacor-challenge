@@ -6,13 +6,6 @@ pub use error::{Error, Result};
 pub use vm::{SynacorVM, Event};
 pub use disassembler::disassemble;
 
-#[macro_export]
-macro_rules! concat_u16 {
-    ($hi:expr,$lo:expr) => {
-        (($hi as u16) << 8) | $lo as u16
-    };
-}
-
 #[derive(Debug, Clone)]
 pub struct Stack<T: Default + Copy, const S: usize> {
     pointer: usize,
