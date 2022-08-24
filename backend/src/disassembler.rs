@@ -49,7 +49,7 @@ pub fn to_assembly_instruction(pc: &mut usize, memory: &[u16]) -> String {
         return out;
     }
 
-    let param_strings = memory[*pc + 1..*pc + 1 + param_count].iter().map(|&val| {
+    let param_strings = memory[*pc..*pc + param_count].iter().map(|&val| {
         if opcode == 19 {
             match val {
                 0 => "'[NUL]' ".into(),
